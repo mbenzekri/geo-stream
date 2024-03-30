@@ -1,0 +1,51 @@
+{
+    "name": "OSM-poi",
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "type": "ferry_terminal",
+                "adr": "",
+                "name": "Notre-Dame"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3501002,
+                    48.8518175
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "type": "fuel",
+                "adr": "91170",
+                "name": "Relais Total De La Grande Borne"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3689918,
+                    48.6510011
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "type": "fuel",
+                "adr": "",
+                "name": "Station BP"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.6763849,
+                    48.8649703
+                ]
+            }
+        }
+    ]
+}

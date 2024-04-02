@@ -1,87 +1,66 @@
-import { TransformStream, ReadableStream, TransformStreamDefaultController } from "node:stream/web"
+import { TransformStream } from "node:stream/web"
+import { Feature, FeatureEnqueuer } from "./types"
+
 const ocurly = '{'.charCodeAt(0)
 const ccurly = '}'.charCodeAt(0)
 const obracket = '['.charCodeAt(0)
 const cbracket = ']'.charCodeAt(0)
-const colon = ':'.charCodeAt(0) 
+const colon = ':'.charCodeAt(0)
 const coma = ','.charCodeAt(0)
 const quote = '"'.charCodeAt(0)
 const space = ' '.charCodeAt(0)
 const multi = 128
-export type FeatureLocation = { json: object, offset: number, length: number}
-type FeatureEnqueuer = {enqueue: (location:FeatureLocation) => void}
 
-export function NodeS2WebS(nodeStream: any) {
-
-    async function* nodeStreamToIterator(stream: any) {
-        for await (const chunk of stream) {
-            yield chunk;
-        }
-    }
-    const iterator = nodeStreamToIterator(nodeStream)
-
-    return new ReadableStream<Uint8Array>({
-        async pull(controller) {
-            const { value, done } = await iterator.next()
-            if (done) {
-                controller.close()
-            } else {
-                controller.enqueue(new Uint8Array(value))
-            }
-        },
-    })
-}
-
-export class GeojsonParser extends TransformStream {
+export class GeojsonRS extends TransformStream<Uint8Array, Feature> {
     state = 'any'
     stack: [string, number][] = []
     pos = 0
     line = 0
     col = 0
-    enqueuer? : FeatureEnqueuer = {enqueue: () => void 0}
+    enqueuer?: FeatureEnqueuer = { enqueue: (feature: Feature) => void 0 }
+    resolve?: Function
+    reject?: Function
     chars: number[] = []
-    constructor () {
+    withLocation = false
+    constructor(withLocation = false) {
         super({
-            transform: (chunk:Uint8Array, controller:TransformStreamDefaultController<FeatureLocation>) => {
+            transform: (chunk, controller) => {
                 this.enqueuer = controller
-                chunk.forEach( charcode => this.put(charcode))
+                chunk.forEach(charcode => this.put(charcode))
             }
         })
+        this.withLocation = withLocation
     }
-    private init(enqueuer: FeatureEnqueuer = {enqueue: () => void 0}) {
+    static forEach(array: Uint8Array, action: (feature: Feature) => void) {
+        const rs = new GeojsonRS()
+            rs.init({ enqueue: action })
+            array.forEach(charcode => rs.put(charcode))
+    }
+
+    private init(enqueuer: FeatureEnqueuer = { enqueue: (feature: Feature) => void 0 }) {
         this.state = 'any'
         this.pos = this.line = this.col = 0
         this.stack = []
         this.enqueuer = enqueuer
-    } 
-    /**
-     * 
-     * @param {Buffer} jsonbuf
-     * @param {function} onfeature
-     * @returns {Buffer} Array of unint records  pairs [pos,length]
-     */
-    parse(jsonbuf: Uint8Array, onfeature: (location: FeatureLocation) => void) {
-        this.init({enqueue: onfeature})
-        jsonbuf.forEach( charcode => this.put(charcode))
     }
     // put next char in parsing
     private put(charcode: number) {
-            //console.log(`PUT: [${this.pos}=${charcode} > ${String.fromCharCode(charcode)} `)
-            if (charcode === 0x0A) { this.line++; this.col = 0 }
-            this.col++
-            if (this.stack.length >= 2 && !(this.chars.length == 0 && charcode == coma) ) 
-                this.chars.push(charcode) 
-            else 
-                this.chars = []
-            if (charcode !== 0x5C) { // skip backslashed char
-                charcode = Math.min(multi, Math.max(space, charcode))
-                this.automata[this.state](charcode)
-            }
-            this.pos++
+        //console.log(`PUT: [${this.pos}=${charcode} > ${String.fromCharCode(charcode)} `)
+        if (charcode === 0x0A) { this.line++; this.col = 0 }
+        this.col++
+        if (this.stack.length >= 2 && !(this.chars.length == 0 && charcode == coma))
+            this.chars.push(charcode)
+        else
+            this.chars = []
+        if (charcode !== 0x5C) { // skip backslashed char
+            charcode = Math.min(multi, Math.max(space, charcode))
+            this.automata[this.state](charcode)
+        }
+        this.pos++
     }
     // push current state and offset in stack
-    private push() { 
-        this.stack.push([this.state, this.pos]) 
+    private push() {
+        this.stack.push([this.state, this.pos])
     }
     // pop saved state and call onobject if object have been parsed
     private pop() {
@@ -95,16 +74,17 @@ export class GeojsonParser extends TransformStream {
 
         if (estate == 'object' && this.stack.length == 2) {
             const str = Buffer.from(this.chars).toString("utf-8")
-            const json = JSON.parse(str)
-            this.enqueuer.enqueue({ json, offset , length })
-            this.chars=[]
+            const feature = JSON.parse(str) as Feature
+            if (this.withLocation) feature._location = { offset, length }
+            this.enqueuer.enqueue(feature)
+            this.chars = []
         }
         return [offset, end]
     }
     unexpected(charcode: number) {
         throw new Error(`Unexpected char '${String.fromCharCode(charcode)}' at ${this.line}:${this.col} `)
     }
-    
+
     // finite state automata for parsing next char  
     private automata: { [name: string]: (charcode: number) => void } = {
         any: (charcode: number) => {

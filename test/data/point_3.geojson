@@ -1,0 +1,10 @@
+{
+    "name": "poi",
+    "type": "FeatureCollection",
+    "features":
+        [
+            { "type": "Feature", "properties": { "name": "A" }, "geometry": { "type": "Point", "coordinates": [1.0, 1.0] } },
+            { "type": "Feature", "properties": { "name": "B" }, "geometry": { "type": "Point", "coordinates": [2.0, 2.0] } },
+            { "type": "Feature", "properties": { "name": "C" }, "geometry": { "type": "Point", "coordinates": [3.0, 3.0] } }
+        ]
+}
